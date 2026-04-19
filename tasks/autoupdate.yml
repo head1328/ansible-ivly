@@ -1,0 +1,33 @@
+---
+- name: Ensure auto-update timer override directory exists
+  become: true
+  become_user: "{{ ivly_podman_user }}"
+  ansible.builtin.file:
+    path: "{{ ivly_podman_home }}/.config/systemd/user/podman-auto-update.timer.d"
+    state: "{{ 'directory' if ivly_autoupdate_enabled else 'absent' }}"
+    mode: "0755"
+
+- name: Configure auto-update timer schedule
+  become: true
+  become_user: "{{ ivly_podman_user }}"
+  ansible.builtin.copy:
+    dest: "{{ ivly_podman_home }}/.config/systemd/user/podman-auto-update.timer.d/override.conf"
+    content: |
+      [Timer]
+      OnCalendar=
+      OnCalendar={{ ivly_autoupdate_time }}
+      RandomizedDelaySec={{ ivly_autoupdate_random_delay }}
+    mode: "0644"
+  when: ivly_autoupdate_enabled
+  notify: Reload systemd user daemon
+
+- name: Set podman-auto-update timer state (rootless)
+  become: true
+  become_user: "{{ ivly_podman_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "{{ ivly_xdg_runtime_dir }}"
+  ansible.builtin.systemd_service:
+    name: podman-auto-update.timer
+    enabled: "{{ ivly_autoupdate_enabled }}"
+    state: "{{ 'started' if ivly_autoupdate_enabled else 'stopped' }}"
+    scope: user

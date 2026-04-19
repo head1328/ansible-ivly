@@ -1,0 +1,152 @@
+---
+# Best-practice playbook for deploying ivly behind an internal Caddy
+# (e.g. Raspberry Pi at home, *.fritz.box / *.local domains).
+#
+# Assumed topology:
+#   - host `ivly`   - any Raspberry Pi 4/5, runs the ivly stack (this playbook).
+#   - host `ollama` - optional, a Raspberry Pi 5 with the Hailo AI HAT+,
+#                     runs Ollama behind its own Caddy (see the
+#                     `head1328.hailo` and `head1328.hailo_ollama` roles).
+#                     If you don't have one, point `ivly_ollama_url` to any
+#                     reachable Ollama, or leave the LLM block out entirely
+#                     to disable LLM-backed features in ivly.
+#
+# It demonstrates:
+#   - rootless Podman + Quadlets
+#   - automatic container updates with a randomized schedule
+#   - listening on privileged ports 80/443 via iptables NAT redirection
+#   - Caddy with internal CA (self-signed certs for *.fritz.box / *.local)
+#   - trusting an external CA inside ivly-api (e.g. for an internal Ollama)
+#   - Ansible Vault for secrets
+#
+# Prerequisites:
+#   ansible-galaxy install -r requirements.yml
+#   ansible-vault create group_vars/ivly/vault.yml   # add vault_ivly_couchdb_password
+#
+# Usage:
+#   ansible-playbook -i inventories/homelab/hosts.yml example/playbook.yml \
+#     --ask-vault-pass
+
+- name: Deploy ivly
+  hosts: ivly
+  become: true
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Reboot host
+      ansible.builtin.reboot:
+
+  pre_tasks:
+    - name: Assert podman binary is available
+      ansible.builtin.command: podman --version
+      register: podman_version
+      changed_when: false
+      failed_when: podman_version.rc != 0
+
+    # Containers can otherwise starve essential services (sshd, journald, dbus)
+    # under load. Bumping their CPUWeight to 1000 (default 100) keeps the host
+    # responsive and reachable when the workload spikes.
+    - name: "Protect critical system services from CPU starvation"
+      block:
+        - name: "Ensure systemd drop-in directories for critical services"
+          ansible.builtin.file:
+            path: "/etc/systemd/system/{{ item }}.service.d"
+            state: directory
+            owner: root
+            group: root
+            mode: "0755"
+          loop:
+            - ssh
+            - systemd-journald
+            - dbus
+
+        - name: "Set high CPUWeight for critical services"
+          ansible.builtin.copy:
+            dest: "/etc/systemd/system/{{ item }}.service.d/cpu-weight.conf"
+            owner: root
+            group: root
+            mode: "0644"
+            content: |
+              [Service]
+              CPUWeight=1000
+          loop:
+            - ssh
+            - systemd-journald
+            - dbus
+          notify: Reload systemd
+
+    # Rootless Podman requires the memory cgroup controller. On Raspberry Pi OS
+    # it is not enabled by default. This task is idempotent: it strips any
+    # existing copies of the flags and re-appends them once, keeping
+    # /boot/firmware/cmdline.txt as a single line (required by the bootloader).
+    - name: "Ensure kernel cmdline has required cgroup flags (one-liner safe)"
+      block:
+        - name: Read kernel cmdline
+          ansible.builtin.slurp:
+            path: /boot/firmware/cmdline.txt
+          register: cmdline_raw
+
+        - name: Build normalized kernel cmdline
+          ansible.builtin.set_fact:
+            cmdline_new: >-
+              {{
+                (cmdline_raw.content | b64decode | trim)
+                | regex_replace('\s*cgroup_enable=memory\s*', ' ')
+                | regex_replace('\s*cgroup_memory=1\s*', ' ')
+                | regex_replace('\s*swapaccount=1\s*', ' ')
+                | regex_replace('\s+', ' ')
+                | trim
+              }}
+              cgroup_enable=memory cgroup_memory=1 swapaccount=1
+
+        - name: Write kernel cmdline (exactly one line)
+          ansible.builtin.copy:
+            dest: /boot/firmware/cmdline.txt
+            content: "{{ cmdline_new }}"
+            owner: root
+            group: root
+            mode: "0644"
+          notify: Reboot host
+
+  roles:
+
+    - role: head1328.ivly
+
+      # --- Identity & secrets -------------------------------------------------
+      ivly_couchdb_password: "{{ vault_ivly_couchdb_password }}"
+      ivly_app_locale: "de-DE"
+
+      # --- Caddy (reverse proxy) ---------------------------------------------
+      # Use a real FQDN to make Caddy serve HTTPS. For internal domains that
+      # public ACME servers can't reach (e.g. *.fritz.box, *.local), enable
+      # the internal CA so Caddy issues self-signed certs from its own root.
+      # Distribute /data/caddy/pki/authorities/local/root.crt to clients to
+      # silence browser warnings.
+      ivly_caddy_domain: "ivly.fritz.box"
+      ivly_caddy_tls_internal: true
+
+      # --- Privileged ports (80 / 443) ---------------------------------------
+      # Rootless Podman can't bind to ports < 1024. Have iptables redirect
+      # external 80/443 traffic to the unprivileged ports Caddy listens on.
+      ivly_iptables_enabled: true
+      ivly_iptables_in_interface: eth0
+
+      # --- Remote LLM (Ollama) -----------------------------------------------
+      # If the Ollama endpoint is fronted by another Caddy with `tls internal`
+      # (e.g. on a different host), include that root CA so ivly-api trusts
+      # it. SSL_CERT_DIR replaces the system trust store - if ivly-api also
+      # needs to talk to public TLS endpoints, add their roots here too.
+      ivly_ollama_url: "https://ollama.fritz.box/ollama"
+      ivly_ollama_model: "qwen3:1.7b"
+      ivly_custom_certs:
+        - "files/ivly/ollama-caddy-root.crt"
+
+      # --- Automatic image updates -------------------------------------------
+      # Pull updated images every night, with a 15 min jitter so a fleet of
+      # hosts doesn't hit the registry simultaneously.
+      ivly_autoupdate_enabled: true
+      ivly_autoupdate_time: "04:00"
+      ivly_autoupdate_random_delay: 900

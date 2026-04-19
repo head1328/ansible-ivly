@@ -1,0 +1,106 @@
+---
+# Redirect privileged ports to Caddy's high ports (rootless Podman cannot
+# bind < 1024). Rules are persisted via iptables-persistent so they survive
+# reboots.
+
+# -------------------------------------------------------------------
+# Ensure iptables-persistent
+# -------------------------------------------------------------------
+
+- name: Install iptables-persistent
+  become: true
+  ansible.builtin.apt:
+    name: iptables-persistent
+    state: present
+    update_cache: true
+    cache_valid_time: 86400
+
+- name: Enable and start netfilter-persistent
+  become: true
+  ansible.builtin.systemd_service:
+    name: netfilter-persistent
+    enabled: true
+    state: started
+
+# -------------------------------------------------------------------
+# NAT rules: HTTP + HTTPS
+# -------------------------------------------------------------------
+
+- name: Configure iptables port redirection for ivly
+  become: true
+  block:
+
+    # HTTP (IPv4)
+    - name: Redirect HTTP IPv4 TCP to Caddy
+      ansible.builtin.iptables:
+        table: nat
+        chain: PREROUTING
+        in_interface: "{{ ivly_iptables_in_interface }}"
+        protocol: tcp
+        destination_port: "{{ ivly_iptables_external_http_port }}"
+        jump: REDIRECT
+        to_ports: "{{ ivly_http_port }}"
+        comment: "ivly: redirect http to caddy"
+      register: ivly_iptables_http_v4
+
+    # HTTP (IPv6)
+    - name: Redirect HTTP IPv6 TCP to Caddy
+      ansible.builtin.iptables:
+        table: nat
+        chain: PREROUTING
+        in_interface: "{{ ivly_iptables_in_interface }}"
+        protocol: tcp
+        destination_port: "{{ ivly_iptables_external_http_port }}"
+        jump: REDIRECT
+        to_ports: "{{ ivly_http_port }}"
+        ip_version: ipv6
+        comment: "ivly: redirect http to caddy"
+      register: ivly_iptables_http_v6
+
+    # HTTPS (IPv4)
+    - name: Redirect HTTPS IPv4 TCP to Caddy
+      ansible.builtin.iptables:
+        table: nat
+        chain: PREROUTING
+        in_interface: "{{ ivly_iptables_in_interface }}"
+        protocol: tcp
+        destination_port: "{{ ivly_iptables_external_https_port }}"
+        jump: REDIRECT
+        to_ports: "{{ ivly_https_port }}"
+        comment: "ivly: redirect https to caddy"
+      register: ivly_iptables_https_v4
+
+    # HTTPS (IPv6)
+    - name: Redirect HTTPS IPv6 TCP to Caddy
+      ansible.builtin.iptables:
+        table: nat
+        chain: PREROUTING
+        in_interface: "{{ ivly_iptables_in_interface }}"
+        protocol: tcp
+        destination_port: "{{ ivly_iptables_external_https_port }}"
+        jump: REDIRECT
+        to_ports: "{{ ivly_https_port }}"
+        ip_version: ipv6
+        comment: "ivly: redirect https to caddy"
+      register: ivly_iptables_https_v6
+
+    # -------------------------------------------------------------------
+    # Persist rules
+    # -------------------------------------------------------------------
+
+    - name: Save iptables IPv4 rules
+      community.general.iptables_state:
+        state: saved
+        path: /etc/iptables/rules.v4
+      when: >
+        ivly_iptables_http_v4 is changed or
+        ivly_iptables_https_v4 is changed
+
+    - name: Save iptables IPv6 rules
+      community.general.iptables_state:
+        state: saved
+        path: /etc/iptables/rules.v6
+        ip_version: ipv6
+      when: >
+        ivly_iptables_http_v6 is changed or
+        ivly_iptables_https_v6 is changed

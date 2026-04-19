@@ -1,0 +1,20 @@
+---
+- name: Ensure custom certs directory exists on host
+  become: true
+  ansible.builtin.file:
+    path: "{{ ivly_custom_certs_host_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Copy custom CA certs to host
+  become: true
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ ivly_custom_certs_host_path }}/{{ item | basename }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ ivly_custom_certs }}"
+  notify: Handle ivly-api changes

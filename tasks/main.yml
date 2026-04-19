@@ -1,0 +1,32 @@
+---
+- name: Lookup podman user information
+  become: true
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ ivly_podman_user }}"
+  register: ivly_podman_getent
+
+- name: Set XDG_RUNTIME_DIR for podman user
+  ansible.builtin.set_fact:
+    ivly_xdg_runtime_dir: "/run/user/{{ ivly_podman_getent.ansible_facts.getent_passwd[ivly_podman_user][1] }}"
+
+- name: Sync custom CA certs to host
+  ansible.builtin.include_tasks: certs.yml
+  when: ivly_custom_certs | length > 0
+
+- name: Configure ivly quadlets (rootless)
+  ansible.builtin.include_tasks: quadlets.yml
+
+- name: Enable rootless systemd user services
+  ansible.builtin.include_tasks: systemd_user.yml
+
+- name: Configure Podman auto-update timer
+  ansible.builtin.include_tasks: autoupdate.yml
+
+- name: Configure iptables port redirection
+  ansible.builtin.include_tasks: iptables.yml
+  when: ivly_iptables_enabled | default(false)
+
+- name: Print ivly endpoint
+  ansible.builtin.debug:
+    msg: "ivly is available at {{ ivly_caddy_domain }}"

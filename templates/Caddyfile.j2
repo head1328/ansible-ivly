@@ -1,0 +1,19 @@
+{$CADDY_DOMAIN::80} {
+{% if ivly_caddy_tls_internal | default(false) %}
+	tls internal
+{% endif %}
+	# API: /api/* -> ivly-api:3000
+	handle /api/* {
+		reverse_proxy ivly-api:3000
+	}
+
+	# Health endpoint exposed at edge level
+	handle /health {
+		reverse_proxy ivly-api:3000
+	}
+
+	# Everything else -> backoffice (nginx serving static SPA)
+	handle {
+		reverse_proxy ivly-backoffice:8080
+	}
+}

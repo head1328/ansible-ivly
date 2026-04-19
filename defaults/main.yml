@@ -1,0 +1,65 @@
+---
+# CouchDB
+ivly_couchdb_image: "docker.io/couchdb:3.5.1"
+ivly_couchdb_user: admin
+ivly_couchdb_password: changeme
+
+# ivly-api
+ivly_api_image: "docker.io/ivly/api:0.1.0"
+
+# ivly-backoffice
+ivly_backoffice_image: "docker.io/ivly/backoffice:0.1.0"
+
+# ivly-printer (LaTeX PDF rendering)
+ivly_printer_image: "docker.io/ivly/printer:0.1.0"
+
+# ivly-validation (XRechnung/ZUGFeRD validation)
+ivly_validation_image: "docker.io/ivly/validation:0.1.0"
+
+# Caddy reverse proxy
+ivly_caddy_image: "docker.io/caddy:2-alpine"
+ivly_https_port: 8443
+ivly_http_port: 8080
+
+# Caddy domain (:80 = plain HTTP, fqdn = automatic Let's Encrypt)
+ivly_caddy_domain: ":80"
+
+# Use Caddy's internal CA for self-signed certs (for internal domains like *.fritz.box)
+ivly_caddy_tls_internal: false
+
+# Ollama endpoint (optional, remote)
+ivly_ollama_url: ""
+ivly_ollama_model: ""
+
+# App locale
+ivly_app_locale: "de-DE"
+
+# Rootless podman user settings
+ivly_podman_user: "{{ podman_user_name | default('podman') }}"
+ivly_podman_home: "/home/{{ ivly_podman_user }}"
+
+# Automatic image updates (podman-auto-update). Off by default - opt in
+# explicitly. Only useful when the image tag is a floating tag (e.g.
+# `:latest`, `:1`, `:1.2`); pinned tags like `:1.2.3` never change digest
+# and would just spend bandwidth checking.
+ivly_autoupdate_enabled: false
+ivly_autoupdate_time: "04:00"
+ivly_autoupdate_random_delay: 900
+
+# iptables port redirection (for privileged ports < 1024)
+# Redirects external_http_port -> ivly_http_port and external_https_port -> ivly_https_port
+ivly_iptables_enabled: false
+ivly_iptables_external_http_port: 80
+ivly_iptables_external_https_port: 443
+ivly_iptables_in_interface: eth0
+
+# Custom CA certificates to mount into ivly-api
+# List of paths (on the Ansible controller, relative to the playbook) to PEM
+# files that should be trusted by ivly-api - e.g. an internal Caddy root CA
+# in front of the Ollama endpoint.
+# When non-empty, the files are copied to ivly_custom_certs_host_path on the
+# host and exposed inside the container via SSL_CERT_DIR. Note: SSL_CERT_DIR
+# replaces the system trust store, so any TLS endpoint ivly-api needs to talk
+# to (currently only the Ollama URL) must be covered by the listed certs.
+ivly_custom_certs: []
+ivly_custom_certs_host_path: "/etc/ivly/extra-certs"
