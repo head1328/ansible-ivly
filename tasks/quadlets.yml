@@ -1,0 +1,216 @@
+---
+- name: Ensure quadlet directory exists (rootless)
+  become: true
+  become_user: "{{ ivly_podman_user }}"
+  ansible.builtin.file:
+    path: "{{ ivly_podman_home }}/.config/containers/systemd"
+    state: directory
+    mode: "0755"
+
+- name: Ensure Caddy config directory exists
+  become: true
+  ansible.builtin.file:
+    path: /etc/caddy
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy Caddyfile
+  become: true
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: /etc/caddy/Caddyfile
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Handle Caddy changes
+
+- name: Ensure shared podman network exists (rootless)
+  become: true
+  become_user: "{{ ivly_podman_user }}"
+  containers.podman.podman_network:
+    name: ivly
+    state: present
+
+# =========================================================================
+# CouchDB
+# =========================================================================
+- name: Create CouchDB quadlet (rootless)
+  become: true
+  become_user: "{{ ivly_podman_user }}"
+  containers.podman.podman_container:
+    name: ivly-couchdb
+    image: "{{ ivly_couchdb_image }}"
+    state: quadlet
+    quadlet_dir: "{{ ivly_podman_home }}/.config/containers/systemd"
+    network:
+      - ivly
+    env:
+      COUCHDB_USER: "{{ ivly_couchdb_user }}"
+      COUCHDB_PASSWORD: "{{ ivly_couchdb_password }}"
+    volume:
+      - "ivly-couchdb-data:/opt/couchdb/data:Z"
+    quadlet_options:
+      - |
+        [Install]
+        WantedBy=default.target
+  notify: Handle CouchDB changes
+
+# =========================================================================
+# Validation (XRechnung/ZUGFeRD)
+# =========================================================================
+- name: Create validation quadlet (rootless)
+  become: true
+  become_user: "{{ ivly_podman_user }}"
+  containers.podman.podman_container:
+    name: ivly-validation
+    image: "{{ ivly_validation_image }}"
+    state: quadlet
+    quadlet_dir: "{{ ivly_podman_home }}/.config/containers/systemd"
+    network:
+      - ivly
+    quadlet_options:
+      - |
+        [Install]
+        WantedBy=default.target
+        {% if ivly_autoupdate_enabled | default(false) %}
+
+        [Container]
+        AutoUpdate=registry
+        {% endif %}
+  notify: Handle validation changes
+
+# =========================================================================
+# Printer (LaTeX PDF)
+# =========================================================================
+- name: Create printer quadlet (rootless)
+  become: true
+  become_user: "{{ ivly_podman_user }}"
+  containers.podman.podman_container:
+    name: ivly-printer
+    image: "{{ ivly_printer_image }}"
+    state: quadlet
+    quadlet_dir: "{{ ivly_podman_home }}/.config/containers/systemd"
+    network:
+      - ivly
+    quadlet_options:
+      - |
+        [Install]
+        WantedBy=default.target
+        {% if ivly_autoupdate_enabled | default(false) %}
+
+        [Container]
+        AutoUpdate=registry
+        {% endif %}
+  notify: Handle printer changes
+
+# =========================================================================
+# API
+# =========================================================================
+- name: Create ivly-api quadlet (rootless)
+  become: true
+  become_user: "{{ ivly_podman_user }}"
+  containers.podman.podman_container:
+    name: ivly-api
+    image: "{{ ivly_api_image }}"
+    state: quadlet
+    quadlet_dir: "{{ ivly_podman_home }}/.config/containers/systemd"
+    network:
+      - ivly
+    env: >-
+      {{
+        {
+          'PORT': '3000',
+          'COUCHDB_URL': 'http://ivly-couchdb:5984',
+          'COUCHDB_USER': ivly_couchdb_user,
+          'COUCHDB_PASSWORD': ivly_couchdb_password,
+          'VALIDATOR_URL': 'http://ivly-validation:8080',
+          'PRINTER_URL': 'http://ivly-printer:8080',
+          'OLLAMA_URL': ivly_ollama_url,
+          'OLLAMA_MODEL': ivly_ollama_model,
+          'APP_LOCALE': ivly_app_locale,
+        } | combine(
+          {'SSL_CERT_DIR': '/etc/ssl/certs/custom'} if ivly_custom_certs | length > 0 else {}
+        )
+      }}
+    volume: >-
+      {{
+        ['{}:/etc/ssl/certs/custom:ro'.format(ivly_custom_certs_host_path)]
+        if ivly_custom_certs | length > 0 else []
+      }}
+    quadlet_options:
+      - |
+        [Unit]
+        After=ivly-couchdb.service ivly-validation.service ivly-printer.service
+        Requires=ivly-couchdb.service ivly-validation.service ivly-printer.service
+
+        [Install]
+        WantedBy=default.target
+        {% if ivly_autoupdate_enabled | default(false) %}
+
+        [Container]
+        AutoUpdate=registry
+        {% endif %}
+  notify: Handle ivly-api changes
+
+# =========================================================================
+# Backoffice (static SPA via nginx)
+# =========================================================================
+- name: Create ivly-backoffice quadlet (rootless)
+  become: true
+  become_user: "{{ ivly_podman_user }}"
+  containers.podman.podman_container:
+    name: ivly-backoffice
+    image: "{{ ivly_backoffice_image }}"
+    state: quadlet
+    quadlet_dir: "{{ ivly_podman_home }}/.config/containers/systemd"
+    network:
+      - ivly
+    quadlet_options:
+      - |
+        [Install]
+        WantedBy=default.target
+        {% if ivly_autoupdate_enabled | default(false) %}
+
+        [Container]
+        AutoUpdate=registry
+        {% endif %}
+  notify: Handle ivly-backoffice changes
+
+# =========================================================================
+# Caddy (reverse proxy)
+# =========================================================================
+- name: Create Caddy quadlet (rootless)
+  become: true
+  become_user: "{{ ivly_podman_user }}"
+  containers.podman.podman_container:
+    name: ivly-caddy
+    image: "{{ ivly_caddy_image }}"
+    state: quadlet
+    quadlet_dir: "{{ ivly_podman_home }}/.config/containers/systemd"
+    network:
+      - ivly
+    publish:
+      - "{{ ivly_https_port }}:443/tcp"
+      - "{{ ivly_http_port }}:80/tcp"
+    env:
+      CADDY_DOMAIN: "{{ ivly_caddy_domain }}"
+    volume:
+      - "/etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro,Z"
+      - "ivly-caddy-data:/data:Z"
+      - "ivly-caddy-config:/config:Z"
+    quadlet_options:
+      - |
+        [Unit]
+        After=ivly-api.service ivly-backoffice.service
+        Requires=ivly-api.service ivly-backoffice.service
+
+        [Install]
+        WantedBy=default.target
+        {% if ivly_autoupdate_enabled | default(false) %}
+
+        [Container]
+        AutoUpdate=registry
+        {% endif %}
+  notify: Handle Caddy changes

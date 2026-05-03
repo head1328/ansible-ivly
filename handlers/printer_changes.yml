@@ -1,0 +1,20 @@
+---
+- name: Reload systemd user daemon
+  become: true
+  become_user: "{{ ivly_podman_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "{{ ivly_xdg_runtime_dir }}"
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+    scope: user
+
+- name: Enable and restart printer (rootless)
+  become: true
+  become_user: "{{ ivly_podman_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "{{ ivly_xdg_runtime_dir }}"
+  ansible.builtin.systemd_service:
+    name: ivly-printer.service
+    enabled: true
+    state: restarted
+    scope: user

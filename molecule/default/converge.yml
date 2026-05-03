@@ -1,0 +1,18 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    podman_user_name: podman
+    ivly_podman_user: podman
+    ivly_couchdb_password: test123
+    ivly_caddy_domain: ":80"
+    ivly_ollama_url: ""
+    ivly_ollama_model: ""
+    ivly_iptables_enabled: true
+    ivly_iptables_in_interface: eth0
+
+  roles:
+    - role: head1328.ivly

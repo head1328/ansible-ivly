@@ -1,0 +1,242 @@
+---
+- name: Verify
+  hosts: all
+  become: false
+  gather_facts: true
+
+  vars:
+    podman_user_name: podman
+    podman_user_group: podman
+    ivly_podman_user: podman
+    ivly_https_port: 8443
+    ivly_http_port: 8080
+
+  tasks:
+    # =====================================
+    # Podman user verification
+    # =====================================
+
+    - name: Verify podman user exists
+      become: true
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ ivly_podman_user }}"
+      register: verify_podman_user
+
+    - name: Assert podman user exists
+      ansible.builtin.assert:
+        that:
+          - verify_podman_user.ansible_facts.getent_passwd[ivly_podman_user] is defined
+        fail_msg: "Podman user '{{ ivly_podman_user }}' does not exist"
+        success_msg: "Podman user '{{ ivly_podman_user }}' exists"
+
+    # =====================================
+    # Quadlet files verification
+    # =====================================
+
+    - name: Check if quadlet files exist
+      become: true
+      become_user: "{{ ivly_podman_user }}"
+      ansible.builtin.stat:
+        path: "/home/{{ ivly_podman_user }}/.config/containers/systemd/{{ item }}.container"
+      register: verify_quadlets
+      loop:
+        - ivly-couchdb
+        - ivly-api
+        - ivly-backoffice
+        - ivly-printer
+        - ivly-validation
+        - ivly-caddy
+
+    - name: Assert all quadlet files exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: "Quadlet file {{ item.item }}.container does not exist"
+        success_msg: "Quadlet file {{ item.item }}.container exists"
+      loop: "{{ verify_quadlets.results }}"
+
+    # =====================================
+    # Systemd services verification
+    # =====================================
+
+    - name: Get XDG_RUNTIME_DIR for podman user
+      become: true
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ ivly_podman_user }}"
+      register: verify_getent
+
+    - name: Set XDG_RUNTIME_DIR fact
+      ansible.builtin.set_fact:
+        verify_xdg_runtime_dir: "/run/user/{{ verify_getent.ansible_facts.getent_passwd[ivly_podman_user][1] }}"
+
+    - name: Check service status
+      become: true
+      become_user: "{{ ivly_podman_user }}"
+      environment:
+        XDG_RUNTIME_DIR: "{{ verify_xdg_runtime_dir }}"
+      ansible.builtin.systemd_service:
+        name: "{{ item }}.service"
+        scope: user
+      register: verify_services
+      failed_when: false
+      loop:
+        - ivly-couchdb
+        - ivly-api
+        - ivly-backoffice
+        - ivly-printer
+        - ivly-validation
+        - ivly-caddy
+
+    - name: Assert all services are running
+      ansible.builtin.assert:
+        that:
+          - item.status.ActiveState == "active"
+          - item.status.UnitFileState in ["enabled", "generated"]
+        fail_msg: "Service {{ item.item }} is not running or not enabled"
+        success_msg: "Service {{ item.item }} is running and enabled"
+      loop: "{{ verify_services.results }}"
+
+    # =====================================
+    # Container verification
+    # =====================================
+
+    - name: List running containers
+      become: true
+      become_user: "{{ ivly_podman_user }}"
+      environment:
+        XDG_RUNTIME_DIR: "{{ verify_xdg_runtime_dir }}"
+      containers.podman.podman_container_info:
+      register: verify_containers
+
+    - name: Assert all containers are running
+      ansible.builtin.assert:
+        that:
+          - verify_containers.containers | selectattr('Name', 'equalto', item) | list | length == 1
+          - (verify_containers.containers | selectattr('Name', 'equalto', item) | first).State.Running
+        fail_msg: "Container {{ item }} is not running"
+        success_msg: "Container {{ item }} is running"
+      loop:
+        - ivly-couchdb
+        - ivly-api
+        - ivly-backoffice
+        - ivly-printer
+        - ivly-validation
+        - ivly-caddy
+
+    # =====================================
+    # Network verification
+    # =====================================
+
+    - name: List Podman networks
+      become: true
+      become_user: "{{ ivly_podman_user }}"
+      environment:
+        XDG_RUNTIME_DIR: "{{ verify_xdg_runtime_dir }}"
+      containers.podman.podman_network_info:
+      register: verify_networks
+
+    - name: Assert ivly network exists
+      ansible.builtin.assert:
+        that:
+          - verify_networks.networks | selectattr('name', 'equalto', 'ivly') | list | length == 1
+        fail_msg: "ivly Podman network does not exist"
+        success_msg: "ivly Podman network exists"
+
+    # =====================================
+    # Caddyfile verification
+    # =====================================
+
+    - name: Check if Caddyfile exists
+      become: true
+      ansible.builtin.stat:
+        path: /etc/caddy/Caddyfile
+      register: verify_caddyfile
+
+    - name: Assert Caddyfile exists
+      ansible.builtin.assert:
+        that:
+          - verify_caddyfile.stat.exists
+        fail_msg: "Caddyfile does not exist"
+        success_msg: "Caddyfile exists"
+
+    # =====================================
+    # Auto-update timer verification
+    # =====================================
+
+    - name: Check if auto-update timer override exists
+      become: true
+      become_user: "{{ ivly_podman_user }}"
+      ansible.builtin.stat:
+        path: "/home/{{ ivly_podman_user }}/.config/systemd/user/podman-auto-update.timer.d/override.conf"
+      register: verify_autoupdate_override
+
+    - name: Assert auto-update timer override exists
+      ansible.builtin.assert:
+        that:
+          - verify_autoupdate_override.stat.exists
+        fail_msg: "Auto-update timer override does not exist"
+        success_msg: "Auto-update timer override exists"
+
+    # =====================================
+    # iptables verification
+    # =====================================
+
+    - name: Dump iptables NAT rules (IPv4)
+      become: true
+      ansible.builtin.command:
+        cmd: iptables-save -t nat
+      register: verify_iptables_v4
+      changed_when: false
+
+    - name: Assert iptables redirect rules exist (IPv4)
+      ansible.builtin.assert:
+        that:
+          - "'ivly: redirect http to caddy' in verify_iptables_v4.stdout"
+          - "'ivly: redirect https to caddy' in verify_iptables_v4.stdout"
+        fail_msg: "iptables redirect rules (IPv4) not found"
+        success_msg: "iptables redirect rules (IPv4) exist"
+
+    - name: Dump iptables NAT rules (IPv6)
+      become: true
+      ansible.builtin.command:
+        cmd: ip6tables-save -t nat
+      register: verify_iptables_v6
+      changed_when: false
+
+    - name: Assert iptables redirect rules exist (IPv6)
+      ansible.builtin.assert:
+        that:
+          - "'ivly: redirect http to caddy' in verify_iptables_v6.stdout"
+          - "'ivly: redirect https to caddy' in verify_iptables_v6.stdout"
+        fail_msg: "iptables redirect rules (IPv6) not found"
+        success_msg: "iptables redirect rules (IPv6) exist"
+
+    - name: Check persisted rules file exists (IPv4)
+      become: true
+      ansible.builtin.stat:
+        path: /etc/iptables/rules.v4
+      register: verify_rules_v4
+
+    - name: Assert persisted rules file exists (IPv4)
+      ansible.builtin.assert:
+        that:
+          - verify_rules_v4.stat.exists
+        fail_msg: "Persisted iptables rules.v4 not found"
+        success_msg: "Persisted iptables rules.v4 exists"
+
+    - name: Read persisted rules file (IPv4)
+      become: true
+      ansible.builtin.command:
+        cmd: cat /etc/iptables/rules.v4
+      register: verify_rules_v4_content
+      changed_when: false
+
+    - name: Assert persisted rules contain ivly redirects
+      ansible.builtin.assert:
+        that:
+          - "'ivly: redirect http to caddy' in verify_rules_v4_content.stdout"
+          - "'ivly: redirect https to caddy' in verify_rules_v4_content.stdout"
+        fail_msg: "Persisted rules.v4 does not contain ivly redirects"
+        success_msg: "Persisted rules.v4 contains ivly redirects (will survive reboot)"
