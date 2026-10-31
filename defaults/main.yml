@@ -1,20 +1,20 @@
 ---
 # CouchDB
-ivly_couchdb_image: "docker.io/couchdb:3.5.1"
+ivly_couchdb_image: "docker.io/couchdb:3.5.3"
 ivly_couchdb_user: admin
 ivly_couchdb_password: changeme
 
 # ivly-api
-ivly_api_image: "docker.io/ivly/api:0.1.0"
+ivly_api_image: "docker.io/ivly/api:0.3.1"
 
 # ivly-backoffice
-ivly_backoffice_image: "docker.io/ivly/backoffice:0.1.0"
+ivly_backoffice_image: "docker.io/ivly/backoffice:0.3.1"
 
 # ivly-printer (LaTeX PDF rendering)
-ivly_printer_image: "docker.io/ivly/printer:0.1.0"
+ivly_printer_image: "docker.io/ivly/printer:0.3.1"
 
 # ivly-validation (XRechnung/ZUGFeRD validation)
-ivly_validation_image: "docker.io/ivly/validation:0.1.0"
+ivly_validation_image: "docker.io/ivly/validation:0.2.0"
 
 # Caddy reverse proxy
 ivly_caddy_image: "docker.io/caddy:2-alpine"
