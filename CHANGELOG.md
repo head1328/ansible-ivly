@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-31
+
+### Changed
+
+- Image defaults follow ivly-release 0.3.1: `ivly/api`, `ivly/backoffice`
+  and `ivly/printer` at 0.3.1, `ivly/validation` at 0.2.0, `couchdb` at
+  3.5.3. Create a CouchDB backup before upgrading.
+- README lists the pinned image defaults instead of `latest`.
+
 ## [0.1.0] - 2026-05-02
 
 First tagged release. Part of the ivly platform v0.1.0 ("Featherweight").
@@ -61,5 +70,6 @@ Published to Ansible Galaxy as `head1328.ivly`.
   components requires either overriding the `ivly_*_image` variable or
   releasing a new role version with updated defaults.
 
-[Unreleased]: https://codeberg.org/ivly/ansible-ivly/compare/0.1.0...HEAD
-[0.1.0]: https://codeberg.org/ivly/ansible-ivly/releases/tag/0.1.0
+[Unreleased]: https://codeberg.org/ivly/ansible-ivly/compare/v0.2.0...HEAD
+[0.2.0]: https://codeberg.org/ivly/ansible-ivly/compare/v0.1.0...v0.2.0
+[0.1.0]: https://codeberg.org/ivly/ansible-ivly/releases/tag/v0.1.0
