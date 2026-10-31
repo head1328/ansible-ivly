@@ -1,0 +1,5 @@
+---
+# Galaxy lints a fresh clone without requirements.yml installed.
+# Roles from requirements.yml must not be mocked, the mock blocks their install.
+mock_roles:
+  - head1328.ivly

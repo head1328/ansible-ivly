@@ -43,3 +43,4 @@
       ansible.builtin.shell:
         cmd: echo "127.0.0.1 ivly.test.local" >> /etc/hosts
       when: ivly_hosts_check.rc != 0
+      changed_when: true
