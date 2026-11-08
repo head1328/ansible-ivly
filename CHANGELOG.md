@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-08
+
+### Added
+
+- `ivly_banner_text_de`, `ivly_banner_text_en` and `ivly_banner_level` set
+  the operator notice in the sidebar, empty by default.
+
+### Changed
+
+- Image defaults follow ivly-release 0.3.2: `ivly/api` and
+  `ivly/backoffice` at 0.3.2.
+- Requires `head1328.podman` v0.2.0, which supports local runs as root and
+  installs the rootless Podman dependencies.
+
+### Removed
+
+- The `/health` route in Caddy, it always returned 404. The API health is
+  available at `/api/v1/health`.
+
 ## [0.2.0] - 2026-10-31
 
 ### Changed

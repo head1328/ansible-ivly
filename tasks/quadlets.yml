@@ -130,6 +130,9 @@
           'OLLAMA_URL': ivly_ollama_url,
           'OLLAMA_MODEL': ivly_ollama_model,
           'APP_LOCALE': ivly_app_locale,
+          'BANNER_TEXT_DE': ivly_banner_text_de,
+          'BANNER_TEXT_EN': ivly_banner_text_en,
+          'BANNER_LEVEL': ivly_banner_level,
         } | combine(
           {'SSL_CERT_DIR': '/etc/ssl/certs/custom'} if ivly_custom_certs | length > 0 else {}
         )
