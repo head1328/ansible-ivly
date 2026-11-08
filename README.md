@@ -28,7 +28,6 @@ https://ivly.example.local
 Caddy (reverse proxy)
   |
   +-- /api/*   --> ivly-api:3000
-  +-- /health  --> ivly-api:3000
   +-- /*       --> ivly-backoffice:8080
 
 ivly-api:3000

@@ -7,11 +7,6 @@
 		reverse_proxy ivly-api:3000
 	}
 
-	# Health endpoint exposed at edge level
-	handle /health {
-		reverse_proxy ivly-api:3000
-	}
-
 	# Everything else -> backoffice (nginx serving static SPA)
 	handle {
 		reverse_proxy ivly-backoffice:8080
