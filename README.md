@@ -139,13 +139,16 @@ Default values are defined in `defaults/main.yml`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ivly_api_image` | `docker.io/ivly/api:0.3.1` | API container image |
-| `ivly_backoffice_image` | `docker.io/ivly/backoffice:0.3.1` | Backoffice container image |
+| `ivly_api_image` | `docker.io/ivly/api:0.3.2` | API container image |
+| `ivly_backoffice_image` | `docker.io/ivly/backoffice:0.3.2` | Backoffice container image |
 | `ivly_printer_image` | `docker.io/ivly/printer:0.3.1` | Printer container image |
 | `ivly_validation_image` | `docker.io/ivly/validation:0.2.0` | Validation container image |
 | `ivly_ollama_url` | (empty) | Remote Ollama endpoint (optional) |
 | `ivly_ollama_model` | (empty) | Ollama model name (optional) |
 | `ivly_app_locale` | `de-DE` | Application locale |
+| `ivly_banner_text_de` | (empty) | Operator notice in the sidebar, German, one line. A missing language falls back to the other one. |
+| `ivly_banner_text_en` | (empty) | Operator notice in the sidebar, English, one line |
+| `ivly_banner_level` | `info` | Notice level, `info` or `warning` |
 
 ### Caddy / Network
 

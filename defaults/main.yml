@@ -5,10 +5,10 @@ ivly_couchdb_user: admin
 ivly_couchdb_password: changeme
 
 # ivly-api
-ivly_api_image: "docker.io/ivly/api:0.3.1"
+ivly_api_image: "docker.io/ivly/api:0.3.2"
 
 # ivly-backoffice
-ivly_backoffice_image: "docker.io/ivly/backoffice:0.3.1"
+ivly_backoffice_image: "docker.io/ivly/backoffice:0.3.2"
 
 # ivly-printer (LaTeX PDF rendering)
 ivly_printer_image: "docker.io/ivly/printer:0.3.1"
@@ -33,6 +33,11 @@ ivly_ollama_model: ""
 
 # App locale
 ivly_app_locale: "de-DE"
+
+# Operator notice in the sidebar, one line each, empty hides it
+ivly_banner_text_de: ""
+ivly_banner_text_en: ""
+ivly_banner_level: "info"
 
 # Rootless podman user settings
 ivly_podman_user: "{{ podman_user_name | default('podman') }}"
